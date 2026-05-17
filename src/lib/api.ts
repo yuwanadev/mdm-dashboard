@@ -1,4 +1,4 @@
-import { ApiResponse, AuthTokens, CreateDeviceResult, Device, DeviceStatus, CommandLog } from './types';
+import { ApiResponse, AuthTokens, CreateDeviceResult, Device, DeviceStatus, CommandLog, Group } from './types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
