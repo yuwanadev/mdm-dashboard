@@ -104,6 +104,24 @@ export async function login(username: string, password: string): Promise<ApiResp
   return data;
 }
 
+export async function checkSetupStatus(): Promise<ApiResponse<{ requires_setup: boolean }>> {
+  const res = await fetch(`${API_BASE}/api/auth/setup-status`);
+  return res.json();
+}
+
+export async function setupAdmin(username: string, password: string): Promise<ApiResponse<AuthTokens>> {
+  const res = await fetch(`${API_BASE}/api/auth/setup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+  const data = await res.json();
+  if (data.success && data.data) {
+    saveTokens(data.data);
+  }
+  return data;
+}
+
 export async function refreshToken(): Promise<ApiResponse<AuthTokens>> {
   const tokens = getTokens();
   if (!tokens?.refresh_token) {

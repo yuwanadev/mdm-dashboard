@@ -57,7 +57,7 @@ export interface CommandLog {
   device_id: string;
   command_type: string;
   payload?: any;
-  status: 'PENDING' | 'SENT' | 'SUCCESS' | 'FAILED' | 'TIMEOUT';
+  status: "PENDING" | "SENT" | "SUCCESS" | "FAILED" | "TIMEOUT";
   message?: string;
   result?: any;
   created_at: string;
@@ -79,6 +79,7 @@ export interface ApiResponse<T> {
 export interface CreateDeviceResult {
   device: Device;
   token: string;
+  server_url: string;
 }
 
 export interface WSMessage {

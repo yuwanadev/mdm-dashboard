@@ -2,23 +2,26 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { login, checkSetupStatus } from '@/lib/api';
+import { setupAdmin, checkSetupStatus } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import { Shield, LogIn, AlertCircle } from 'lucide-react';
+import { Shield, UserPlus, AlertCircle } from 'lucide-react';
 
-export default function LoginPage() {
+export default function SetupPage() {
   const router = useRouter();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true); // Start loading to check status
+  const [loading, setLoading] = useState(true); // Check if setup is actually needed
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     const checkSetup = async () => {
       try {
         const res = await checkSetupStatus();
-        if (res.success && res.data?.requires_setup) {
-          router.push('/setup');
+        if (res.success && !res.data?.requires_setup) {
+          // Setup not required, redirect to login
+          router.push('/login');
         } else {
           setLoading(false);
         }
@@ -32,23 +35,42 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setLoading(true);
 
-    const res = await login(username, password);
-    setLoading(false);
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters long');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    const res = await setupAdmin(username, password);
+    setIsSubmitting(false);
 
     if (res.success) {
       router.push('/dashboard');
     } else {
-      setError(res.error || 'Invalid credentials');
+      setError(res.error || 'Failed to create user');
     }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background relative overflow-hidden">
       {/* Background gradient effects */}
-      <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] rounded-full bg-primary/5 blur-[120px]" />
-      <div className="absolute bottom-[-20%] left-[-10%] w-[500px] h-[500px] rounded-full bg-primary/3 blur-[100px]" />
+      <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full bg-primary/5 blur-[120px]" />
+      <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] rounded-full bg-primary/3 blur-[100px]" />
 
       <div className="relative z-10 w-full max-w-md mx-4">
         {/* Logo */}
@@ -56,18 +78,18 @@ export default function LoginPage() {
           <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4 border border-primary/20">
             <Shield className="w-8 h-8 text-primary" />
           </div>
-          <h1 className="text-3xl font-bold gradient-text mb-1">YuwanaDev MDM</h1>
+          <h1 className="text-3xl font-bold gradient-text mb-1">Welcome to MDM</h1>
           <p className="text-sm text-muted-foreground">
-            Sign in to manage your devices
+            Let's create your admin account to get started.
           </p>
         </div>
 
-        {/* Login Card */}
+        {/* Setup Card */}
         <div className="glass-card rounded-2xl p-8">
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label htmlFor="username" className="block text-sm font-medium text-foreground mb-2">
-                Username
+                Admin Username
               </label>
               <input
                 id="username"
@@ -103,6 +125,28 @@ export default function LoginPage() {
                 )}
                 placeholder="••••••••"
                 required
+                minLength={6}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-foreground mb-2">
+                Confirm Password
+              </label>
+              <input
+                id="confirmPassword"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className={cn(
+                  'w-full px-4 py-3 rounded-xl bg-secondary/50 border border-border',
+                  'text-foreground placeholder:text-muted-foreground',
+                  'focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50',
+                  'transition-all duration-200'
+                )}
+                placeholder="••••••••"
+                required
+                minLength={6}
               />
             </div>
 
@@ -114,9 +158,9 @@ export default function LoginPage() {
             )}
 
             <button
-              id="login-btn"
+              id="setup-btn"
               type="submit"
-              disabled={loading}
+              disabled={isSubmitting}
               className={cn(
                 'w-full py-3.5 rounded-xl font-medium text-sm transition-all duration-200',
                 'bg-primary text-primary-foreground hover:bg-primary/90',
@@ -125,12 +169,12 @@ export default function LoginPage() {
                 'shadow-lg shadow-primary/20'
               )}
             >
-              {loading ? (
+              {isSubmitting ? (
                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               ) : (
                 <>
-                  <LogIn className="w-4 h-4" />
-                  Sign In
+                  <UserPlus className="w-4 h-4" />
+                  Create Admin Account
                 </>
               )}
             </button>
