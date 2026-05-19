@@ -5,7 +5,7 @@ import { getAccessToken } from '@/lib/api';
 import { useDeviceStore } from '@/lib/store';
 import { WSMessage } from '@/lib/types';
 
-const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080';
+
 
 /**
  * Custom hook for WebSocket connection to the dashboard endpoint.
@@ -24,7 +24,8 @@ export function useWebSocket() {
     const token = getAccessToken();
     if (!token) return;
 
-    const url = `${WS_BASE}/ws/dashboard?token=${token}`;
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const url = `${protocol}//${window.location.host}/ws/dashboard?token=${token}`;
 
     try {
       const ws = new WebSocket(url);

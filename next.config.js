@@ -11,6 +11,10 @@ const nextConfig = {
         source: '/screenshots/:path*',
         destination: `${process.env.BACKEND_URL || 'http://localhost:8080'}/screenshots/:path*`,
       },
+      {
+        source: '/ws/:path*',
+        destination: `${process.env.BACKEND_URL || 'http://localhost:8080'}/ws/:path*`,
+      },
     ];
   },
 };

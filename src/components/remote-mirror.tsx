@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useState, useRef, useCallback, useEffect } from 'react';
-import { getAccessToken } from '@/lib/api';
+import { useState, useRef, useCallback, useEffect } from "react";
+import { getAccessToken } from "@/lib/api";
 import {
   Monitor,
   X,
@@ -11,9 +11,7 @@ import {
   WifiOff,
   Maximize2,
   Minimize2,
-} from 'lucide-react';
-
-const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080';
+} from "lucide-react";
 
 interface RemoteMirrorProps {
   deviceId: string;
@@ -21,11 +19,18 @@ interface RemoteMirrorProps {
   onClose: () => void;
 }
 
-export function RemoteMirror({ deviceId, isOnline, onClose }: RemoteMirrorProps) {
+export function RemoteMirror({
+  deviceId,
+  isOnline,
+  onClose,
+}: RemoteMirrorProps) {
   const [connected, setConnected] = useState(false);
   const [streaming, setStreaming] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [touchFeedback, setTouchFeedback] = useState<{ x: number; y: number } | null>(null);
+  const [touchFeedback, setTouchFeedback] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
@@ -36,11 +41,13 @@ export function RemoteMirror({ deviceId, isOnline, onClose }: RemoteMirrorProps)
 
   const stopMirror = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: 'STOP_MIRROR',
-        payload: { device_id: deviceId },
-        timestamp: new Date().toISOString(),
-      }));
+      wsRef.current.send(
+        JSON.stringify({
+          type: "STOP_MIRROR",
+          payload: { device_id: deviceId },
+          timestamp: new Date().toISOString(),
+        }),
+      );
     }
     pcRef.current?.close();
     pcRef.current = null;
@@ -54,46 +61,50 @@ export function RemoteMirror({ deviceId, isOnline, onClose }: RemoteMirrorProps)
     const token = getAccessToken();
     if (!token) return;
 
-    const url = `${WS_BASE}/ws/dashboard?token=${token}`;
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const url = `${protocol}//${window.location.host}/ws/dashboard?token=${token}`;
     const ws = new WebSocket(url);
-    wsRef.current = ws;
 
     ws.onopen = async () => {
-      console.log('[Mirror] WS connected for WebRTC signaling');
+      console.log("[Mirror] WS connected for WebRTC signaling");
       setConnected(true);
 
       // Tell device to start WebRTC pipeline
-      ws.send(JSON.stringify({
-        type: 'START_MIRROR',
-        payload: { device_id: deviceId },
-        timestamp: new Date().toISOString(),
-      }));
+      ws.send(
+        JSON.stringify({
+          type: "START_MIRROR",
+          payload: { device_id: deviceId },
+          timestamp: new Date().toISOString(),
+        }),
+      );
 
       // Initialize WebRTC PeerConnection
       const pc = new RTCPeerConnection({
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+        iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
       });
       pcRef.current = pc;
 
       // Handle incoming ICE candidates
       pc.onicecandidate = (event) => {
         if (event.candidate && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({
-            type: 'WEBRTC_SIGNAL',
-            payload: {
-              device_id: deviceId,
-              signal: {
-                type: 'ice_candidate',
-                candidate: event.candidate,
-              }
-            }
-          }));
+          ws.send(
+            JSON.stringify({
+              type: "WEBRTC_SIGNAL",
+              payload: {
+                device_id: deviceId,
+                signal: {
+                  type: "ice_candidate",
+                  candidate: event.candidate,
+                },
+              },
+            }),
+          );
         }
       };
 
       // Handle incoming video track
       pc.ontrack = (event) => {
-        console.log('[Mirror] Received WebRTC track');
+        console.log("[Mirror] Received WebRTC track");
         if (videoRef.current) {
           if (event.streams && event.streams.length > 0) {
             videoRef.current.srcObject = event.streams[0];
@@ -111,40 +122,49 @@ export function RemoteMirror({ deviceId, isOnline, onClose }: RemoteMirrorProps)
     ws.onmessage = async (event) => {
       try {
         const msg = JSON.parse(event.data);
-        if (msg.type === 'WEBRTC_SIGNAL') {
+        if (msg.type === "WEBRTC_SIGNAL") {
           const signal = msg.payload.signal;
           const pc = pcRef.current;
           if (!pc) return;
 
-          if (signal.type === 'offer') {
-            console.log('[Mirror] Received WebRTC offer');
-            await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: signal.sdp }));
+          if (signal.type === "offer") {
+            console.log("[Mirror] Received WebRTC offer");
+            await pc.setRemoteDescription(
+              new RTCSessionDescription({ type: "offer", sdp: signal.sdp }),
+            );
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
-            
+
             if (ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({
-                type: 'WEBRTC_SIGNAL',
-                payload: {
-                  device_id: deviceId,
-                  signal: {
-                    type: 'answer',
-                    sdp: answer.sdp,
-                  }
-                }
-              }));
+              ws.send(
+                JSON.stringify({
+                  type: "WEBRTC_SIGNAL",
+                  payload: {
+                    device_id: deviceId,
+                    signal: {
+                      type: "answer",
+                      sdp: answer.sdp,
+                    },
+                  },
+                }),
+              );
             }
-          } else if (signal.type === 'answer') {
-            console.log('[Mirror] Received WebRTC answer');
-            await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: signal.sdp }));
-          } else if (signal.type === 'ice_candidate') {
+          } else if (signal.type === "answer") {
+            console.log("[Mirror] Received WebRTC answer");
+            await pc.setRemoteDescription(
+              new RTCSessionDescription({ type: "answer", sdp: signal.sdp }),
+            );
+          } else if (signal.type === "ice_candidate") {
             await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
           }
-        } else if (msg.type === 'ERROR' && msg.payload.error === 'MEDIA_PROJECTION_REVOKED') {
-          console.warn('[Mirror] Device projection revoked');
+        } else if (
+          msg.type === "ERROR" &&
+          msg.payload.error === "MEDIA_PROJECTION_REVOKED"
+        ) {
+          console.warn("[Mirror] Device projection revoked");
           stopMirror();
-          alert('Screen mirror permission was revoked on the device.');
-        } else if (msg.type === 'STOP_MIRROR') {
+          alert("Screen mirror permission was revoked on the device.");
+        } else if (msg.type === "STOP_MIRROR") {
           stopMirror();
         }
       } catch (err) {
@@ -153,12 +173,11 @@ export function RemoteMirror({ deviceId, isOnline, onClose }: RemoteMirrorProps)
     };
 
     ws.onclose = () => {
-      console.log('[Mirror] WS disconnected');
+      console.log("[Mirror] WS disconnected");
       setConnected(false);
       setStreaming(false);
       pcRef.current?.close();
     };
-
   }, [deviceId, stopMirror]);
 
   // Auto-start on mount, cleanup on unmount
@@ -176,11 +195,11 @@ export function RemoteMirror({ deviceId, isOnline, onClose }: RemoteMirrorProps)
     if (!video) return null;
 
     const rect = video.getBoundingClientRect();
-    
+
     // Natural dimensions of the video stream
     const naturalW = video.videoWidth;
     const naturalH = video.videoHeight;
-    
+
     if (!naturalW || !naturalH) return null;
 
     // Calculate rendered dimensions inside object-fit: contain
@@ -217,14 +236,16 @@ export function RemoteMirror({ deviceId, isOnline, onClose }: RemoteMirrorProps)
 
   const sendTouchEvent = (payload: any) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: 'TOUCH_EVENT',
-        payload: {
-          device_id: deviceId,
-          touch: payload,
-        },
-        timestamp: new Date().toISOString(),
-      }));
+      wsRef.current.send(
+        JSON.stringify({
+          type: "TOUCH_EVENT",
+          payload: {
+            device_id: deviceId,
+            touch: payload,
+          },
+          timestamp: new Date().toISOString(),
+        }),
+      );
     }
   };
 
@@ -250,10 +271,10 @@ export function RemoteMirror({ deviceId, isOnline, onClose }: RemoteMirrorProps)
       // Swipe
       const dx = Math.abs(coords.x - dragStartRef.current.x);
       const dy = Math.abs(coords.y - dragStartRef.current.y);
-      
+
       if (dx > 0.02 || dy > 0.02) {
         sendTouchEvent({
-          action: 'swipe',
+          action: "swipe",
           x: dragStartRef.current.x,
           y: dragStartRef.current.y,
           end_x: coords.x,
@@ -264,7 +285,7 @@ export function RemoteMirror({ deviceId, isOnline, onClose }: RemoteMirrorProps)
     } else {
       // Tap
       sendTouchEvent({
-        action: 'tap',
+        action: "tap",
         x: coords.x,
         y: coords.y,
       });
@@ -318,7 +339,9 @@ export function RemoteMirror({ deviceId, isOnline, onClose }: RemoteMirrorProps)
               ) : (
                 <div className="flex items-center gap-1.5 text-red-500">
                   <WifiOff className="w-3 h-3" />
-                  <span className="text-[10px] font-bold uppercase">Offline</span>
+                  <span className="text-[10px] font-bold uppercase">
+                    Offline
+                  </span>
                 </div>
               )}
               {streaming && (
@@ -333,10 +356,17 @@ export function RemoteMirror({ deviceId, isOnline, onClose }: RemoteMirrorProps)
               onClick={toggleFullscreen}
               className="p-1.5 rounded-md hover:bg-secondary/80 text-muted-foreground hover:text-foreground transition-all"
             >
-              {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+              {isFullscreen ? (
+                <Minimize2 className="w-4 h-4" />
+              ) : (
+                <Maximize2 className="w-4 h-4" />
+              )}
             </button>
             <button
-              onClick={() => { stopMirror(); onClose(); }}
+              onClick={() => {
+                stopMirror();
+                onClose();
+              }}
               className="p-1.5 rounded-md hover:bg-red-500/20 text-muted-foreground hover:text-red-500 transition-all"
             >
               <X className="w-4 h-4" />
@@ -350,11 +380,13 @@ export function RemoteMirror({ deviceId, isOnline, onClose }: RemoteMirrorProps)
             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center space-y-4 bg-black/80">
               <Loader2 className="w-8 h-8 animate-spin text-primary/60 mx-auto" />
               <p className="text-sm text-muted-foreground">
-                {connected ? 'Negotiating WebRTC PeerConnection...' : 'Connecting...'}
+                {connected
+                  ? "Negotiating WebRTC PeerConnection..."
+                  : "Connecting..."}
               </p>
             </div>
           )}
-          
+
           <div className="relative inline-block w-full h-full flex items-center justify-center">
             <video
               ref={videoRef}
@@ -371,7 +403,7 @@ export function RemoteMirror({ deviceId, isOnline, onClose }: RemoteMirrorProps)
                 const coords = getNormalizedCoords(e);
                 if (coords) {
                   sendTouchEvent({
-                    action: 'long_press',
+                    action: "long_press",
                     x: coords.x,
                     y: coords.y,
                     duration: 800,
@@ -398,7 +430,10 @@ export function RemoteMirror({ deviceId, isOnline, onClose }: RemoteMirrorProps)
             </div>
           </div>
           <button
-            onClick={() => { stopMirror(); onClose(); }}
+            onClick={() => {
+              stopMirror();
+              onClose();
+            }}
             className="px-4 py-1.5 rounded-lg bg-secondary/60 text-foreground text-xs font-bold hover:bg-secondary transition-all"
           >
             End Session
