@@ -23,12 +23,15 @@ export const useDeviceStore = create<DeviceStore>((set, get) => ({
   },
 
   updateDevice: (id, data) => {
-    set((state) => ({
-      devices: {
-        ...state.devices,
-        [id]: { ...state.devices[id], ...data },
-      },
-    }));
+    set((state) => {
+      if (!state.devices[id]) return state;
+      return {
+        devices: {
+          ...state.devices,
+          [id]: { ...state.devices[id], ...data },
+        },
+      };
+    });
   },
 
   updateDeviceStatus: (id, status) => {

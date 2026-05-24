@@ -4,6 +4,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { getAccessToken } from '@/lib/api';
 import { useDeviceStore } from '@/lib/store';
 import { WSMessage } from '@/lib/types';
+import { useToastStore } from '@/components/toaster';
 
 
 
@@ -17,6 +18,7 @@ export function useWebSocket() {
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const attemptRef = useRef(0);
   const [isConnected, setIsConnected] = useState(false);
+  const notifiedRef = useRef<Record<string, { battery: boolean; offline: boolean; temp: boolean; online_once: boolean }>>({});
 
   const { setDeviceOnline, updateDeviceStatus, updateDevice } = useDeviceStore();
 
@@ -144,6 +146,96 @@ export function useWebSocket() {
       disconnect();
     };
   }, [connect, disconnect]);
+
+  useEffect(() => {
+    // Check for offline devices and low battery every 10 seconds
+    const interval = setInterval(() => {
+      const devices = useDeviceStore.getState().getDeviceList();
+      const now = new Date().getTime();
+      
+      devices.forEach((device) => {
+        const isFirstSeen = !notifiedRef.current[device.id];
+        
+        if (isFirstSeen) {
+          notifiedRef.current[device.id] = { battery: false, offline: !device.is_online, temp: false, online_once: device.is_online };
+          
+          // Check if device was created recently (within last 2 minutes)
+          const isNew = now - new Date(device.created_at).getTime() < 120000;
+          if (isNew) {
+            useToastStore.getState().addToast({
+              title: 'New Asset Registered',
+              description: `${device.device_name || 'Unknown Device'} has been created.`,
+              type: 'success'
+            });
+            if (device.is_online) {
+              useToastStore.getState().addToast({
+                title: 'Connection Established',
+                description: `${device.device_name || 'Unknown Device'} connected successfully for the first time.`,
+                type: 'success'
+              });
+            }
+          }
+        }
+        
+        const state = notifiedRef.current[device.id];
+        
+        // 1. Check Offline > 1 min
+        if (!device.is_online) {
+          const lastSeen = new Date(device.last_seen || 0).getTime();
+          if (now - lastSeen > 60000 && !state.offline) {
+            state.offline = true;
+            useToastStore.getState().addToast({
+              title: 'Device Disconnected',
+              description: `${device.device_name || 'Unknown Device'} has been offline for over 1 minute.`,
+              type: 'error'
+            });
+          }
+        } else {
+          // If it just came online and we haven't seen it online yet
+          if (!state.online_once) {
+            state.online_once = true;
+            useToastStore.getState().addToast({
+              title: 'Device Online',
+              description: `${device.device_name || 'Unknown Device'} is now connected.`,
+              type: 'success'
+            });
+          }
+          // Reset offline state if device comes back online
+          state.offline = false;
+        }
+
+        // 2. Check Low Battery (<= 15%)
+        if (device.status?.battery !== undefined) {
+          if (device.status.battery <= 15 && !state.battery && !device.status.battery_status?.toLowerCase().includes('charging')) {
+            state.battery = true;
+            useToastStore.getState().addToast({
+              title: 'Low Battery',
+              description: `${device.device_name || 'Unknown Device'} is at ${device.status.battery}%.`,
+              type: 'warning'
+            });
+          } else if (device.status.battery > 15 || device.status.battery_status?.toLowerCase().includes('charging')) {
+            state.battery = false;
+          }
+        }
+
+        // 3. Check High Temperature (>= 40°C)
+        if (device.status?.temperature !== undefined) {
+          if (device.status.temperature >= 40 && !state.temp) {
+            state.temp = true;
+            useToastStore.getState().addToast({
+              title: 'High Temperature Alert',
+              description: `${device.device_name || 'Unknown Device'} is running hot at ${device.status.temperature.toFixed(1)}°C.`,
+              type: 'warning'
+            });
+          } else if (device.status.temperature < 40) {
+            state.temp = false;
+          }
+        }
+      });
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   return { isConnected, send, disconnect, reconnect: connect, wsRef };
 }

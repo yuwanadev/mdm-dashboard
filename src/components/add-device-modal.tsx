@@ -21,7 +21,8 @@ export function AddDeviceModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<CreateDeviceResult | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copiedServer, setCopiedServer] = useState(false);
+  const [copiedToken, setCopiedToken] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,11 +45,19 @@ export function AddDeviceModal({
     }
   };
 
-  const handleCopy = async () => {
+  const handleCopyServer = async () => {
+    if (result?.server_url) {
+      await navigator.clipboard.writeText(result.server_url);
+      setCopiedServer(true);
+      setTimeout(() => setCopiedServer(false), 2000);
+    }
+  };
+
+  const handleCopyToken = async () => {
     if (result?.token) {
       await navigator.clipboard.writeText(result.token);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setCopiedToken(true);
+      setTimeout(() => setCopiedToken(false), 2000);
     }
   };
 
@@ -56,7 +65,8 @@ export function AddDeviceModal({
     setDeviceName("");
     setError("");
     setResult(null);
-    setCopied(false);
+    setCopiedServer(false);
+    setCopiedToken(false);
     onClose();
   };
 
@@ -170,15 +180,15 @@ export function AddDeviceModal({
                   {result.server_url}
                 </code>
                 <button
-                  onClick={handleCopy}
+                  onClick={() => handleCopyServer()}
                   className={cn(
                     "absolute top-2 right-2 p-2 rounded-lg transition-all duration-200",
-                    copied
+                    copiedServer
                       ? "bg-emerald-400/20 text-emerald-400"
                       : "bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground",
                   )}
                 >
-                  {copied ? (
+                  {copiedServer ? (
                     <Check className="w-4 h-4" />
                   ) : (
                     <Copy className="w-4 h-4" />
@@ -198,15 +208,15 @@ export function AddDeviceModal({
                   {result.token}
                 </code>
                 <button
-                  onClick={handleCopy}
+                  onClick={() => handleCopyToken()}
                   className={cn(
                     "absolute top-2 right-2 p-2 rounded-lg transition-all duration-200",
-                    copied
+                    copiedToken
                       ? "bg-emerald-400/20 text-emerald-400"
                       : "bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground",
                   )}
                 >
-                  {copied ? (
+                  {copiedToken ? (
                     <Check className="w-4 h-4" />
                   ) : (
                     <Copy className="w-4 h-4" />

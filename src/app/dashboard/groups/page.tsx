@@ -87,9 +87,9 @@ export default function GroupsPage() {
   };
 
   return (
-    <div className="space-y-6 subtle-gradient min-h-full -m-8 p-8">
+    <div className="space-y-6 subtle-gradient min-h-full -m-4 p-4 lg:-m-8 lg:p-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Device Groups</h1>
           <p className="text-sm text-muted-foreground mt-1">

@@ -94,8 +94,8 @@ export default function UpdatesPage() {
   };
 
   return (
-    <div className="space-y-6 subtle-gradient min-h-full -m-8 p-8">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 subtle-gradient min-h-full -m-4 p-4 lg:-m-8 lg:p-8">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">App Distribution</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage and deploy OTA application updates across your fleet.</p>
@@ -141,8 +141,8 @@ export default function UpdatesPage() {
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center gap-2 pr-4 border-r border-border/20">
+              <div className="flex flex-wrap items-center gap-3 w-full md:w-auto mt-4 md:mt-0">
+                <div className="flex flex-wrap items-center gap-2 pr-0 md:pr-4 border-r-0 md:border-r border-border/20">
                   <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mr-2">Deploy to:</p>
                   {groups.map((group) => (
                     <button

@@ -15,11 +15,17 @@ import {
   ChevronRight,
   Circle,
   Download,
+  X,
 } from 'lucide-react';
 
 import packageJson from '../../package.json';
 
-export function Sidebar() {
+interface SidebarProps {
+  isOpen?: boolean;
+  setIsOpen?: (isOpen: boolean) => void;
+}
+
+export function Sidebar({ isOpen = false, setIsOpen }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const devices = useDeviceStore((s) => s.getDeviceList());
@@ -54,6 +60,12 @@ export function Sidebar() {
       active: pathname === '/dashboard/groups'
     },
     { 
+      label: 'Accounts', 
+      href: '/dashboard/accounts', 
+      icon: Users,
+      active: pathname === '/dashboard/accounts'
+    },
+    { 
       label: 'App Updates', 
       href: '/dashboard/updates', 
       icon: Download,
@@ -62,10 +74,22 @@ export function Sidebar() {
   ];
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-64 bg-background border-r border-border/40 flex flex-col z-40">
-      {/* Logo */}
-      <div className="p-6">
-        <Link href="/dashboard" className="flex items-center gap-2.5">
+    <>
+      {/* Mobile Overlay */}
+      {isOpen && setIsOpen && (
+        <div 
+          className="fixed inset-0 bg-background/80 backdrop-blur-sm z-40 lg:hidden"
+          onClick={() => setIsOpen(false)}
+        />
+      )}
+      
+      <aside className={cn(
+        "fixed left-0 top-0 h-screen w-64 bg-background border-r border-border/40 flex flex-col z-50 transition-transform duration-300 ease-in-out lg:translate-x-0",
+        isOpen ? "translate-x-0" : "-translate-x-full"
+      )}>
+        {/* Logo */}
+        <div className="p-6 flex items-center justify-between">
+          <Link href="/dashboard" className="flex items-center gap-2.5" onClick={() => setIsOpen?.(false)}>
           <Shield className="w-6 h-6 text-foreground" />
           <div>
             <h1 className="text-sm font-bold tracking-tight">YuwanaDev MDM</h1>
@@ -76,6 +100,14 @@ export function Sidebar() {
             </p>
           </div>
         </Link>
+        {setIsOpen && (
+          <button 
+            className="lg:hidden p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors"
+            onClick={() => setIsOpen(false)}
+          >
+            <X className="w-5 h-5" />
+          </button>
+        )}
       </div>
 
       {/* Navigation */}
@@ -90,6 +122,11 @@ export function Sidebar() {
                   ? 'text-foreground bg-secondary/80'
                   : 'text-muted-foreground hover:text-foreground hover:bg-secondary/40'
               )}
+              onClick={() => {
+                if (!item.subItems) {
+                  setIsOpen?.(false);
+                }
+              }}
             >
               <item.icon className="w-4 h-4" />
               <span className="flex-1">{item.label}</span>
@@ -107,6 +144,7 @@ export function Sidebar() {
                     <Link
                       key={sub.href}
                       href={sub.href}
+                      onClick={() => setIsOpen?.(false)}
                       className={cn(
                         'flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[12px] font-medium transition-all duration-200',
                         isSubActive
@@ -139,5 +177,6 @@ export function Sidebar() {
         </button>
       </div>
     </aside>
+    </>
   );
 }

@@ -40,7 +40,7 @@ export function getAccessToken(): string | null {
 /**
  * Authenticated fetch wrapper with automated token refresh.
  */
-async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
+export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
   let token = getAccessToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -79,13 +79,21 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<Api
     }
   }
 
-  const data = await res.json();
+  let data: any = {};
+  const text = await res.text();
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { error: text };
+    }
+  }
 
   if (!res.ok) {
     return { success: false, error: data.error || 'Request failed' };
   }
 
-  return data as ApiResponse<T>;
+  return (data.success !== undefined ? data : { success: true, ...data }) as ApiResponse<T>;
 }
 
 // ── Auth ───────────────────────────────────────────────────
@@ -173,6 +181,10 @@ export async function updateDevice(
     method: 'PUT',
     body: JSON.stringify({ device_name: deviceName, label, notes, group_id: groupId }),
   });
+}
+
+export async function getDeviceAccounts(id: string): Promise<ApiResponse<any[]>> {
+  return apiFetch<any[]>(`/api/devices/${id}/accounts`);
 }
 
 // ── Groups ─────────────────────────────────────────────────

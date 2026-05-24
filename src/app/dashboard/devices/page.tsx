@@ -54,7 +54,7 @@ export default function DevicesPage() {
   }, [devices, searchQuery, statusFilter]);
 
   return (
-    <div className="space-y-8 subtle-gradient min-h-full -m-8 p-8">
+    <div className="space-y-6 lg:space-y-8 subtle-gradient min-h-full -m-4 p-4 lg:-m-8 lg:p-8">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>

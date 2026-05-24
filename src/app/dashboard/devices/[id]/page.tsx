@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { getDevice, sendCommand, getCommandHistory, deleteDevice, updateDevice, getGroups } from '@/lib/api';
+import { getDevice, sendCommand, getCommandHistory, deleteDevice, updateDevice, getGroups, getDeviceAccounts } from '@/lib/api';
 import { useDeviceStore } from '@/lib/store';
 import { Device, DeviceStatus, CommandLog, Group } from '@/lib/types';
 import { StatusBadge } from '@/components/status-badge';
@@ -34,6 +34,7 @@ import {
   AlertTriangle,
   MapPin,
   Monitor,
+  RefreshCw,
 } from 'lucide-react';
 
 export default function DeviceDetailPage() {
@@ -44,13 +45,18 @@ export default function DeviceDetailPage() {
   const storeDevice = useDeviceStore((s) => s.devices[deviceId]);
   const [device, setDevice] = useState<(Device & { status?: DeviceStatus }) | null>(null);
   const [commands, setCommands] = useState<CommandLog[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [sendingCmd, setSendingCmd] = useState<string | null>(null);
   
   // Alert modal state
   const [showAlertModal, setShowAlertModal] = useState(false);
   const [alertMessage, setAlertMessage] = useState('');
+  
+  // Delete modal state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   
   // Editing state
   const [isEditingName, setIsEditingName] = useState(false);
@@ -97,11 +103,25 @@ export default function DeviceDetailPage() {
     }
   }, []);
 
+  const fetchAccounts = useCallback(async () => {
+    const res = await getDeviceAccounts(deviceId);
+    if (res.success && res.data) {
+      setAccounts(res.data);
+    }
+  }, [deviceId]);
+
   useEffect(() => {
     fetchDevice();
     fetchCommands();
     fetchGroups();
-  }, [fetchDevice, fetchCommands, fetchGroups]);
+    fetchAccounts();
+  }, [fetchDevice, fetchCommands, fetchGroups, fetchAccounts]);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([fetchDevice(), fetchCommands()]);
+    setTimeout(() => setRefreshing(false), 500); // Artificial delay for UX
+  };
 
   // Periodic refresh to keep location/status data live
   useEffect(() => {
@@ -137,23 +157,33 @@ export default function DeviceDetailPage() {
 
   const handleUpdateDetails = async () => {
     setUpdating(true);
-    const res = await updateDevice(deviceId, newName, newLabel, newNotes, selectedGroupId || undefined);
-    if (res.success) {
-      setDevice(prev => prev ? { ...prev, device_name: newName, label: newLabel, notes: newNotes, group_id: selectedGroupId } : null);
-      setIsEditingName(false);
-      setIsEditingMetadata(false);
+    try {
+      const res = await updateDevice(deviceId, newName, newLabel, newNotes, selectedGroupId || undefined);
+      if (res.success) {
+        setDevice(prev => prev ? { ...prev, device_name: newName, label: newLabel, notes: newNotes, group_id: selectedGroupId } : null);
+        setIsEditingName(false);
+        setIsEditingMetadata(false);
+      }
+    } finally {
+      setUpdating(false);
     }
-    setUpdating(false);
   };
 
   const handleDelete = async () => {
-    if (!confirm('Delete this device? This cannot be undone.')) return;
     setDeleting(true);
-    const res = await deleteDevice(deviceId);
-    if (res.success) {
-      router.push('/dashboard');
+    try {
+      const res = await deleteDevice(deviceId);
+      if (res.success) {
+        router.push('/dashboard');
+      } else {
+        setShowDeleteModal(false);
+        // Optionally show an error toast here
+      }
+    } catch {
+      setShowDeleteModal(false);
+    } finally {
+      setDeleting(false);
     }
-    setDeleting(false);
   };
 
   if (loading) {
@@ -181,7 +211,7 @@ export default function DeviceDetailPage() {
   const status = displayDevice.status;
 
   return (
-    <div className="space-y-6 subtle-gradient min-h-full -m-8 p-8">
+    <div className="space-y-6 lg:space-y-8 subtle-gradient min-h-full -m-4 p-4 lg:-m-8 lg:p-8">
       {/* Navigation & Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div className="flex items-center gap-4">
@@ -236,6 +266,14 @@ export default function DeviceDetailPage() {
         </div>
         <div className="flex items-center gap-3">
           <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary/40 text-[13px] font-medium text-foreground hover:bg-secondary transition-all disabled:opacity-50"
+          >
+            <RefreshCw className={cn("w-3.5 h-3.5", refreshing && "animate-spin")} />
+            Sync
+          </button>
+          <button
             onClick={() => router.push('/dashboard')}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary/40 text-[13px] font-medium text-foreground hover:bg-secondary transition-all"
           >
@@ -243,12 +281,12 @@ export default function DeviceDetailPage() {
             Back
           </button>
           <button
-            onClick={handleDelete}
+            onClick={() => setShowDeleteModal(true)}
             disabled={deleting}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/10 text-[13px] font-medium text-red-500 hover:bg-red-500/20 transition-all disabled:opacity-50"
           >
             <Trash2 className="w-3.5 h-3.5" />
-            {deleting ? 'Removing...' : 'Remove'}
+            Remove
           </button>
         </div>
       </div>
@@ -476,7 +514,53 @@ export default function DeviceDetailPage() {
         />
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Delete Device Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="minimal-card max-w-sm w-full bg-background overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="flex items-center justify-between p-4 border-b border-border/40 bg-red-500/10">
+              <h3 className="text-sm font-bold uppercase tracking-widest text-red-500 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4" />
+                Remove Device
+              </h3>
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="p-1 rounded-full hover:bg-red-500/20 text-red-500 transition-colors"
+                disabled={deleting}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <p className="text-sm text-foreground">
+                Are you sure you want to remove <strong>{displayDevice.device_name}</strong>?
+              </p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                This will permanently delete the device record and disconnect it from the server. This action cannot be undone.
+              </p>
+            </div>
+            <div className="p-4 border-t border-border/40 flex justify-end gap-3 bg-secondary/5">
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="px-4 py-2 rounded-lg bg-red-500 text-white text-xs font-bold hover:bg-red-600 transition-all disabled:opacity-50 flex items-center gap-2"
+              >
+                {deleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                {deleting ? 'Removing...' : 'Yes, Remove Device'}
+              </button>
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deleting}
+                className="px-4 py-2 rounded-lg bg-secondary/80 text-foreground text-xs font-bold hover:bg-secondary transition-all disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:items-start">
         {/* Commands Panel */}
         <div className="lg:col-span-1 space-y-4">
           <div className="minimal-card p-5 space-y-5">
@@ -688,9 +772,9 @@ export default function DeviceDetailPage() {
           </div>
         </div>
 
-        {/* Command Log Panel */}
-        <div className="lg:col-span-2">
-          <div className="minimal-card flex flex-col h-full">
+        <div className="lg:col-span-2 space-y-6">
+          {/* Command Log Panel */}
+          <div className="minimal-card flex flex-col max-h-[600px]">
             <div className="px-5 py-4 border-b border-border/40 flex items-center justify-between bg-secondary/10">
               <h3 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Command Ledger</h3>
               <button
@@ -701,7 +785,7 @@ export default function DeviceDetailPage() {
               </button>
             </div>
 
-            <div className="p-2 space-y-2 overflow-y-auto max-h-[600px]">
+            <div className="p-2 space-y-2 overflow-y-auto flex-1">
               {commands.length === 0 ? (
                 <div className="py-20 text-center">
                   <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-widest">No activity recorded</p>
@@ -745,6 +829,33 @@ export default function DeviceDetailPage() {
                         </div>
                       </div>
                     )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Device Accounts Panel */}
+          <div className="minimal-card flex flex-col">
+            <div className="px-5 py-4 border-b border-border/40 flex items-center justify-between bg-secondary/10">
+              <h3 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Device Accounts</h3>
+              <button
+                onClick={fetchAccounts}
+                className="text-[11px] font-bold text-muted-foreground hover:text-foreground transition-colors uppercase tracking-tight"
+              >
+                Sync
+              </button>
+            </div>
+            <div className="p-2 space-y-2 max-h-[400px] overflow-y-auto">
+              {accounts.length === 0 ? (
+                <div className="py-10 text-center">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-widest">No accounts found</p>
+                </div>
+              ) : (
+                accounts.map((acc) => (
+                  <div key={acc.id} className="rounded-lg bg-secondary/20 border border-border/10 p-3 flex flex-col gap-1">
+                    <p className="text-sm font-medium text-foreground">{acc.account_name}</p>
+                    <p className="text-xs text-muted-foreground">{acc.account_type}</p>
                   </div>
                 ))
               )}

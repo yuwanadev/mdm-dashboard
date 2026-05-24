@@ -31,6 +31,7 @@ export function RemoteMirror({
     x: number;
     y: number;
   } | null>(null);
+  const [videoAspect, setVideoAspect] = useState<number | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
@@ -64,7 +65,7 @@ export function RemoteMirror({
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const url = `${protocol}//${window.location.host}/ws/dashboard?token=${token}`;
     const ws = new WebSocket(url);
-
+    wsRef.current = ws;
     ws.onopen = async () => {
       console.log("[Mirror] WS connected for WebRTC signaling");
       setConnected(true);
@@ -111,6 +112,14 @@ export function RemoteMirror({
           } else {
             videoRef.current.srcObject = new MediaStream([event.track]);
           }
+          // Detect video dimensions once metadata is loaded
+          videoRef.current.onloadedmetadata = () => {
+            const v = videoRef.current;
+            if (v && v.videoWidth && v.videoHeight) {
+              setVideoAspect(v.videoWidth / v.videoHeight);
+              console.log(`[Mirror] Video dimensions: ${v.videoWidth}x${v.videoHeight}`);
+            }
+          };
           videoRef.current.play().catch(console.error);
           setStreaming(true);
         }
@@ -306,6 +315,109 @@ export function RemoteMirror({
     isDraggingRef.current = false;
   };
 
+  const getNormalizedCoordsFromTouch = (
+    e: React.TouchEvent<HTMLVideoElement>,
+    touchIndex = 0,
+  ) => {
+    const video = videoRef.current;
+    if (!video) return null;
+
+    const touch = e.touches[touchIndex] || e.changedTouches[touchIndex];
+    if (!touch) return null;
+
+    const rect = video.getBoundingClientRect();
+    const naturalW = video.videoWidth;
+    const naturalH = video.videoHeight;
+
+    if (!naturalW || !naturalH) return null;
+
+    const imgRatio = naturalW / naturalH;
+    const containerRatio = rect.width / rect.height;
+
+    let renderedW, renderedH, offsetX, offsetY;
+
+    if (containerRatio > imgRatio) {
+      renderedH = rect.height;
+      renderedW = rect.height * imgRatio;
+      offsetX = (rect.width - renderedW) / 2;
+      offsetY = 0;
+    } else {
+      renderedW = rect.width;
+      renderedH = rect.width / imgRatio;
+      offsetX = 0;
+      offsetY = (rect.height - renderedH) / 2;
+    }
+
+    const x = (touch.clientX - rect.left - offsetX) / renderedW;
+    const y = (touch.clientY - rect.top - offsetY) / renderedH;
+
+    if (x < 0 || x > 1 || y < 0 || y > 1) {
+      return null;
+    }
+
+    return { x, y };
+  };
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLVideoElement>) => {
+    e.preventDefault();
+    const coords = getNormalizedCoordsFromTouch(e);
+    if (!coords) return;
+
+    isDraggingRef.current = false;
+    dragStartRef.current = coords;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLVideoElement>) => {
+    e.preventDefault();
+    if (dragStartRef.current) {
+      isDraggingRef.current = true;
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent<HTMLVideoElement>) => {
+    e.preventDefault();
+    const coords = getNormalizedCoordsFromTouch(e);
+    if (!coords) return;
+
+    if (isDraggingRef.current && dragStartRef.current) {
+      const dx = Math.abs(coords.x - dragStartRef.current.x);
+      const dy = Math.abs(coords.y - dragStartRef.current.y);
+
+      if (dx > 0.02 || dy > 0.02) {
+        sendTouchEvent({
+          action: "swipe",
+          x: dragStartRef.current.x,
+          y: dragStartRef.current.y,
+          end_x: coords.x,
+          end_y: coords.y,
+          duration: 300,
+        });
+      }
+    } else {
+      sendTouchEvent({
+        action: "tap",
+        x: coords.x,
+        y: coords.y,
+      });
+
+      const video = videoRef.current;
+      if (video) {
+        const rect = video.getBoundingClientRect();
+        const touch = e.changedTouches[0];
+        if (touch) {
+          setTouchFeedback({
+            x: touch.clientX - rect.left,
+            y: touch.clientY - rect.top,
+          });
+          setTimeout(() => setTouchFeedback(null), 300);
+        }
+      }
+    }
+
+    dragStartRef.current = null;
+    isDraggingRef.current = false;
+  };
+
   const toggleFullscreen = () => {
     if (!containerRef.current) return;
     if (!document.fullscreenElement) {
@@ -321,7 +433,14 @@ export function RemoteMirror({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
       <div
         ref={containerRef}
-        className="flex flex-col max-w-5xl w-full max-h-[95vh] bg-background rounded-xl border border-border/30 overflow-hidden shadow-2xl"
+        className="flex flex-col w-full max-h-[95vh] bg-background rounded-xl border border-border/30 overflow-hidden shadow-2xl"
+        style={{
+          maxWidth: videoAspect
+            ? videoAspect < 1
+              ? `min(${Math.round(95 * videoAspect)}vh, 480px)` // Portrait: narrow container
+              : '1024px' // Landscape: wide container
+            : '480px', // Default before video loads
+        }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-border/30 bg-secondary/10">
@@ -375,7 +494,7 @@ export function RemoteMirror({
         </div>
 
         {/* Stream viewport */}
-        <div className="flex-1 bg-black flex items-center justify-center relative overflow-hidden min-h-[400px]">
+        <div className="flex-1 bg-black flex items-center justify-center relative overflow-hidden min-h-[300px]">
           {!streaming && (
             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center space-y-4 bg-black/80">
               <Loader2 className="w-8 h-8 animate-spin text-primary/60 mx-auto" />
@@ -394,9 +513,13 @@ export function RemoteMirror({
               playsInline
               muted
               className="max-h-[calc(95vh-120px)] max-w-full object-contain cursor-crosshair select-none"
+              style={{ touchAction: "none" }}
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
               onContextMenu={(e) => {
                 // Right-click = long press
                 e.preventDefault();
